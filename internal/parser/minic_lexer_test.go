@@ -1,4 +1,4 @@
-package parser
+package parser_test
 
 import (
 	"embed"
@@ -6,30 +6,51 @@ import (
 	"fmt"
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/stretchr/testify/require"
+	"mini-c/internal/parser"
+	"mini-c/internal/testHelper"
 	"testing"
 )
 
-type lexError struct {
-	Line, Column int
-	error
+var tokenTypes []string
+
+func init() {
+	lexer := parser.NewMiniCLexer(nil)
+	tokenTypes = lexer.GetSymbolicNames()
 }
 
-type lexErrorListener struct {
-	*antlr.DefaultErrorListener
-	Errors []lexError
-}
+//go:embed testdata/lexer/success/*.mc
+var testLexerSuccessFs embed.FS
 
-func (l *lexErrorListener) SyntaxError(_ antlr.Recognizer, _ any, line, column int, msg string, _ antlr.RecognitionException) {
-	l.Errors = append(l.Errors, lexError{
-		line,
-		column,
-		errors.New(msg),
-	})
+func TestSuccessLexing(t *testing.T) {
+	testCases, err := testHelper.LoadTestFile(testLexerSuccessFs, ".mc")
+	require.NoError(t, err)
+
+	for name, source := range testCases {
+		t.Run(name, func(t *testing.T) {
+			tokens, lexErrors := lexSource(source)
+			require.Empty(t, lexErrors)
+
+			for _, tok := range tokens {
+				var tokenName string
+				switch tok.GetTokenType() {
+				case parser.MiniCLexerIDENT:
+					tokenName = tok.GetText()
+				case parser.MiniCLexerDECIMAL_LIT,
+					parser.MiniCLexerOCTAL_LIT,
+					parser.MiniCLexerHEX_LIT:
+					tokenName = fmt.Sprintf("(%s)", tok.GetText())
+				default:
+					tokenName = fmt.Sprintf("<%s>", tokenTypes[tok.GetTokenType()])
+				}
+				fmt.Printf("%3d:%d\t%s\n", tok.GetLine(), tok.GetColumn(), tokenName)
+			}
+		})
+	}
 }
 
 func lexSource(input string) ([]antlr.Token, []lexError) {
 	is := antlr.NewInputStream(input)
-	lexer := NewMiniCLexer(is)
+	lexer := parser.NewMiniCLexer(is)
 	lexer.RemoveErrorListeners()
 	errorListener := &lexErrorListener{}
 	lexer.AddErrorListener(errorListener)
@@ -38,33 +59,27 @@ func lexSource(input string) ([]antlr.Token, []lexError) {
 	return tokens, errorListener.Errors
 }
 
-//go:embed testdata/lexer/success/*.mc
-var testLexerSuccessFs embed.FS
+type lexError struct {
+	Line   int
+	Column int
+	error
+}
 
-func TestSuccessLexing(t *testing.T) {
-	testCases, err := loadTestFiles(testLexerSuccessFs, ".mc")
-	require.NoError(t, err)
+type lexErrorListener struct {
+	*antlr.DefaultErrorListener
+	Errors []lexError
+}
 
-	lexer := NewMiniCLexer(nil)
-	tokenTypes := lexer.GetSymbolicNames()
-
-	for name, source := range testCases {
-		t.Run(name, func(t *testing.T) {
-			tokens, lexErrors := lexSource(source)
-			require.Empty(t, lexErrors)
-
-			for _, token := range tokens {
-				var tokenName string
-				switch token.GetTokenType() {
-				case MiniCLexerIDENT:
-					tokenName = token.GetText()
-				case MiniCLexerDECIMAL_LIT, MiniCLexerOCTAL_LIT, MiniCLexerHEX_LIT:
-					tokenName = fmt.Sprintf("(%s)", token.GetText())
-				default:
-					tokenName = fmt.Sprintf("[%s]", tokenTypes[token.GetTokenType()])
-				}
-				fmt.Printf("%3d:%d\t%s\n", token.GetLine(), token.GetColumn(), tokenName)
-			}
-		})
-	}
+func (l *lexErrorListener) SyntaxError(
+	_ antlr.Recognizer,
+	_ any,
+	line, column int,
+	msg string,
+	_ antlr.RecognitionException,
+) {
+	l.Errors = append(l.Errors, lexError{
+		Line:   line,
+		Column: column,
+		error:  errors.New(msg),
+	})
 }

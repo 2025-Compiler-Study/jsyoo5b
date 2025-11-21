@@ -1,11 +1,11 @@
-package parser
+package testHelper
 
 import (
 	"io/fs"
 	"strings"
 )
 
-func loadTestFiles(filesystem fs.FS, ext string) (map[string]string, error) {
+func LoadTestFile(filesystem fs.FS, trimExt string) (map[string]string, error) {
 	testCases := make(map[string]string)
 
 	err := fs.WalkDir(
@@ -18,11 +18,11 @@ func loadTestFiles(filesystem fs.FS, ext string) (map[string]string, error) {
 				return nil
 			}
 
-			data, err := testLexerSuccessFs.ReadFile(path)
+			data, err := fs.ReadFile(filesystem, path)
 			if err != nil {
 				return err
 			}
-			testName := strings.TrimSuffix(d.Name(), ext)
+			testName := strings.TrimSuffix(d.Name(), trimExt)
 			testCases[testName] = string(data)
 			return nil
 		},
