@@ -48,6 +48,25 @@ func TestSuccessLexing(t *testing.T) {
 	}
 }
 
+//go:embed testdata/lexer/fail/*.mc
+var testLexerFailFs embed.FS
+
+func TestFailLexing(t *testing.T) {
+	testCases, err := testHelper.LoadTestFile(testLexerFailFs, ".mc")
+	require.NoError(t, err)
+
+	for name, source := range testCases {
+		t.Run(name, func(t *testing.T) {
+			_, lexErrors := lexSource(source)
+			require.NotEmpty(t, lexErrors)
+
+			for _, e := range lexErrors {
+				fmt.Printf("%3d:%d\t%s\n", e.Line, e.Column, e.error)
+			}
+		})
+	}
+}
+
 func lexSource(input string) ([]antlr.Token, []lexError) {
 	is := antlr.NewInputStream(input)
 	lexer := parser.NewMiniCLexer(is)
